@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>EDropX - Electron Dropbox Client</title>
+
+    <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="./node_modules/bootstrap/dist/css/bootstrap-theme.min.css" />
+
+    <link rel="stylesheet" href="./bower_components/font-awesome/css/font-awesome.min.css">
+
+    <link rel="stylesheet" href="./main.css">    
+
+  </head>
+
+  <body>
+
+    <div class="container">
+      
+      <h1 class="title">Welcome to EDropX</h1>
+
+      <nav id="dcontrolBar" class="navbar">
+        <div class="container-fluid">
+          <ul class="nav navbar-nav">
+            <li>
+              <a href="#" onclick="edropx_openfolder(''); return false;">
+                <i class="fa fa-home fa-2x" aria-hidden="true"></i>              
+                DropBox Home
+              </a>
+            </li>
+            
+            <li>
+              <a href="#" onclick="edropx_refresh(); return false;">
+                <i class="fa fa-refresh fa-2x" aria-hidden="true"></i>
+                Refresh
+              </a>
+            </li>
+
+            <li>
+              <a href="#" onclick="edropx_go_dir_back(); return false;">
+                <i class="fa fa-arrow-circle-o-left fa-2x" aria-hidden="true"></i>
+                Go Back
+              </a>
+            </li>
+
+            <li>
+              <a href="#" onclick="edropx_go_dir_up(); return false;">
+                <i class="fa fa-arrow-circle-o-up fa-2x" aria-hidden="true"></i>
+                Go Up
+              </a>
+            </li>
+
+          </ul>
+          <div class="navbar-form navbar-left">
+            <div class="form-group">
+              <input id="form_search_content" type="text" class="form-control" placeholder="Search" onkeypress="if(event.keyCode == 13){edropx_form_search(); return false; } else { return true; }">
+            </div>
+            <button type="button" class="btn btn-default" onclick="edropx_form_search(); return false;">
+              <i class="fa fa-search fa-2x" aria-hidden="true"></i>
+              Search
+            </button>
+          </form>
+        </div>
+      </nav>
+      
+      <div id="dstatus"></div>
+
+      <div id="dview"></div>
+
+    </div>
+
+    <script src="frontend.js"></script>
+
+    <script>
+
+      edropx.global.dbx = new Dropbox({ accessToken: config.access_token });
+
+      // let edropx.global.dropbox_response;
+      // let edropx.global.global_path = "";
+      // let edropx.global.global_path_history = [];
+
+      //Setting globals
+      edropx.global.global_path = "";
+      edropx.global.global_path_history = [];
+      edropx.global.folder_item_selected_registry = [];
+      //edropx.global.dropbox_response = null;
+
+      
+      // @dropbox_remote_file_path - default value = '', root directory = '';
+
+      function edropx_openfolder(dropbox_remote_file_path='') {
+
+        $("#dview").html("");
+
+        edropx.global.global_path = dropbox_remote_file_path;
+        edropx.global.global_path_history.push(edropx.global.global_path);
+
+        edropx_reset_folder_item_selected_registry();
+
+        edropx_display_info("dstatus", "Loading " +  edropx.global.global_path + " ...");
+
+        edropx.global.dbx.filesListFolder({path: dropbox_remote_file_path})
+        .then(function(response) {
+          
+          edropx.global.dropbox_response = response;
+
+          console.log(response);
+
+          edropx_display_success("dstatus", "Loaded " +  edropx.global.global_path + " Successfully");
+
+          $("#dview").append("<ul id='folder_list'>");
+
+          for(i = 0; i < response.entries.length; i++) {
+
+            var result = response.entries[i];
+
+            var folderItem = edropx_create_folder_item(result);
+
+            console.log("edropx_openfolder#folderItem.filetype", result[".tag"]);
+            console.log("edropx_openfolder#folderItem.filename", result.name);
+            console.log("edropx_openfolder#folderItem.filetype", result.path_lower);
+
+            edropx_render_folder_item(folderItem);
+
+          }
+
+          $("#dview").append("</ul>");
+
+        })
+        .catch(function(error) {
+
+          edropx.global.dropbox_response = error;
+
+          console.log(error);
+          
+          edropx_display_error("dstatus", error.error.error_summary)
+
+        });
+
+      }
+
+      function edropx_go_dir_up() {
+
+        if(edropx.global.global_path != "" || edropx.global.global_path != "/" || edropx.global.global_path_history.length != 0) {
+
+          edropx.global.global_path = edropx.global.global_path.replace(/\/$/, "");
+
+          edropx_openfolder(edropx.global.global_path.substring(0, edropx.global.global_path.lastIndexOf('/')));
+
+        }  else {
+
+          console.log("Cannot go up");
+
+        }
+
+      }
+
+      function edropx_go_dir_back() {
+
+        if(edropx.global.global_path != "" || edropx.global.global_path != "/" || edropx.global.global_path_history.length != 0) {
+
+          edropx.global.global_path_history.pop();
+
+          edropx_openfolder(edropx.global.global_path_history.pop());
+
+        } else {
+
+          console.log("Cannot go back");
+
+        }
+
+      }
+
+      function edropx_refresh() {
+
+        edropx_openfolder(edropx.global.global_path);
+
+      }
+
+      function edropx_form_search() {
+
+        var to_search = $("#form_search_content").val();
+
+        console.log("edropx_form_search#FORM: " + to_search);
+
+        // So you can turn back after search
+
+        edropx.global.global_path_history.push(edropx.global.global_path);
+
+        edropx.global.dbx.filesSearch({
+
+          path: '',
+          query: to_search,
+          start: 0,
+          max_results: 50
+        
+        })
+        .then(function(response) {
+
+          edropx_reset_folder_item_selected_registry();
+          
+          edropx_display_success("dstatus", "<strong>" + response.matches.length + "</strong> results found");
+
+          console.log(response);
+
+          $("#dview").html("<ul id='folder_list'>");
+
+          for(i = 0; i < response.matches.length; i++) {
+
+            var result = response.matches[i].metaresponse;
+
+            var folderItem = edropx_create_folder_item(result);
+
+            console.log("edropx_form_search#folderItem.filetype", result[".tag"]);
+            console.log("edropx_form_search#folderItem.filename", result.name);
+            console.log("edropx_form_search#folderItem.filetype", result.path_lower);
+
+            edropx_render_folder_item(folderItem);
+
+          }
+
+          $("#dview").append("</ul>");
+        
+        })
+        .catch(function(error) {
+
+          edropx_display_error("dstatus", "Search Error - " + error.error);
+
+          console.error(error);
+        
+        });
+
+        return false;
+
+      }
+
+      function edropx_create_folder_item(response) {
+
+        var result = {};
+        
+        result.filetype = response[".tag"];
+        result.filename = response.name;
+        result.filepath = response.path_lower;
+        result.filepath_viewname = response.path_view;
+
+        result.isFolder = (result.filetype == "folder") ? true : false;
+
+        result.filemoreinfo = edropx_what_is_this_file(result.isFolder, result.filepath);
+
+        return result;
+
+      }
+
+      function edropx_render_folder_item(folderItem) {
+
+        // var li = $("<li class=\"folder\"></li>");
+        // var a = $("<a href=\"#\"></a>");
+
+        // a.click(function(ev){
+
+        //   edropx_select_folder_item(ev, this, folderItem);
+
+        //   return false;
+
+        // });
+
+        // a.dblclick(function(ev){
+
+        //   edropx_openfolder(folderItem.filepath);
+
+        //   return false;
+
+        // });
+
+        $("#folder_list").append("<li class=\"folder\"><a href=\"#\" onclick=\"edropx_select_folder_item(event, this); return false;\" ondblclick=\"edropx_openfolder('" + folderItem.filepath + "'); return false;\" title=\"" + folderItem.filepath + "\"  data-file-path=\""+folderItem.filepath+"\" data-file-name=\""+folderItem.filename+"\"><i class=\"" + folderItem.filemoreinfo.faClass + " fa-4x\"></i><br />" + folderItem.filename + "</a></li>");
+
+      }
+
+      function edropx_select_folder_item(ev, folderHTMLElement) {
+
+        var selectedCssClass = "selected";
+
+        console.log(ev);
+        console.log(folderHTMLElement);
+
+        console.log('CTRL pressed during click:', ev.ctrlKey);
+
+        // Check if CTRL is pressed (CTRL-CLICK)
+
+        if(ev.ctrlKey) {
+
+          // If was previously selected, de-select it
+
+          if($(folderHTMLElement).parent().hasClass(selectedCssClass)) {
+
+            $(folderHTMLElement).parent().removeClass(selectedCssClass);
+
+          } else {
+
+            filename = $(folderHTMLElement).attr("data-file-name");
+            filepath = $(folderHTMLElement).attr("data-file-path");
+
+            console.log("edropx_select_folder_item#filename", filename);
+            console.log("edropx_select_folder_item#filepath", filepath);
+
+            $(folderHTMLElement).parent().addClass(selectedCssClass);
+
+            edropx.global.folder_item_selected_registry.push({fn: filename, fp: filepath});
+
+          }
+
+        }
+
+      }
+
+      function edropx_reset_folder_item_selected_registry() {
+
+        edropx.global.folder_item_selected_registry = [];
+
+      }
+
+      function edropx_what_is_this_file(isFolder, filepath) {
+
+        var result = {};
+
+        result.faClass = isFolder ? "fa fa-folder" : "fa fa-file";
+        result.isFolder = isFolder;
+
+        // let fileExtension;
+        // let isPDF;
+        // let isImage;
+        // let isArchive;
+
+        if(!isFolder) {
+
+          result.fileExtension = getFileExtension(filepath);
+          console.log(result.fileExtension);
+
+          if(result.fileExtension == "pdf") {
+
+            result.isPDF = true;
+
+            result.faClass = "fa fa-file-pdf-o";
+
+          } else if(result.fileExtension == "apk") {
+
+            result.isAndroidApp = true;
+
+            result.faClass = "fa fa-android";
+
+          } else if(imageTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isImage = true;
+
+            result.faClass = "fa fa-file-image-o";
+
+          } else if(archiveTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isArchive = true;
+
+            result.faClass = "fa fa-file-archive-o";
+
+          } else if(musicfileTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isMusic = true;
+
+            result.faClass = "fa fa-file-audio-o";
+
+          } else if(videofileTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isVideo = true;
+
+            result.faClass = "fa fa-file-video-o";
+
+          } else if(documentfileTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isDocument = true;
+
+            result.faClass = "fa fa-file-text-o";
+
+          } else if(spreadsheetfileTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isSpreadsheet = true;
+
+            result.faClass = "fa fa-file-excel-o";
+
+          } else if(codefileTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isCode = true;
+
+            result.faClass = "fa fa-code";
+
+          } else if(stylesheetfileTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isStylesheet = true;
+
+            result.faClass = "fa fa-css3";
+
+          } else if(htmlfileTypes.indexOf(result.fileExtension) != -1) {
+
+            result.isHtml = true;
+
+            result.faClass = "fa fa-html5";
+
+          }
+
+        }
+
+        return result;
+
+      }
+
+      function edropx_download_shared_link(shared_link) {
+
+        edropx_display_info("dstatus", "Wait ... Downloading File ...");
+
+        /*edropx.global.dbx.filesDownload({path: dropbox_remote_file_path})
+        .then(function(response) {
+          
+          edropx_display_success("dstatus", "File Downloaded Correctly");
+
+          console.log(response);
+        
+        })
+        .catch(function(error) {
+
+          edropx_display_error("dstatus", "Download - " + error);
+
+          console.error(error);
+        
+        });*/
+
+        //https://www.dropbox.com/s/randomcharcters/file.ext?dl=1
+
+        console.log("---------------------------- VIVA LA FIGA 2 !!! ----------------------------");
+
+        // Get filename from url
+        var filename = shared_link.split("?")[0].split("/").pop();
+
+        console.log("edropx_download_shared_link#filename: " + filename);
+
+        console.log("edropx_download_shared_link#shared_link: " + shared_link);
+
+        edropx_download_file_from_url(shared_link, filename);
+
+        /*var file = fs.createWriteStream("file.jpg");
+
+        var request = http.get(shared_link, function(response) {
+
+          console.log(response);
+
+          response.pipe(final_download_path);
+        
+        });*/
+
+        /*edropx.global.dbx.sharingGetSharedLinkFile({url: shared_link})
+        .then(function(response) {
+
+          final_download_path = edropx.global.default_download_directory + response.name;
+
+          fs.writeFile(final_download_path, response.fileBinary, 'binary', function (err) {
+
+            console.log("edropx_download_shared_link#fs.readFile Writing to " + final_download_path)
+
+            if (err) {
+
+              edropx_display_error("dstatus", err);
+              
+              console.log("edropx_download_shared_link#fs.readFile Error: ");
+              console.log(err);
+
+              return false;
+
+            }
+
+            console.log('File: ' + response.name + ' written.');
+          
+          });
+          
+          edropx_display_success("dstatus", "File Downloaded Correctly to: " + final_download_path);
+
+          console.log(response);
+        
+        })
+        .catch(function(error) {
+
+          edropx_display_error("dstatus", "Download - " + error.error);
+
+          console.error(error);
+        
+        });        */
+
+      }
+
+      function edropx_download_file_from_dropbox(dbx, dropbox_remote_file_path) {
+
+        edropx_display_info("dstatus", "Wait ... Downloading File ...");
+
+        /*edropx.global.dbx.filesDownload({path: dropbox_remote_file_path})
+        .then(function(response) {
+          
+          edropx_display_success("dstatus", "File Downloaded Correctly");
+
+          console.log(response);
+        
+        })
+        .catch(function(error) {
+
+          edropx_display_error("dstatus", "Download - " + error);
+
+          console.error(error);
+        
+        });*/
+
+        console.log("---------------------------- VIVA LA FIGA !!! ----------------------------");
+
+        console.log("edropx_download_file_from_dropbox#dropbox_remote_file_path: " + dropbox_remote_file_path);
+
+        var shared_link = edropx_get_shared_link(dbx, dropbox_remote_file_path, true, true);
+
+        var final_download_path = "";
+
+        console.log("edropx_download_file_from_dropbox#shared_link: " + shared_link);
+
+        edropx.global.dbx.sharingGetSharedLinkFile({url: shared_link})
+        .then(function(response) {
+
+          final_download_path = edropx.global.default_download_directory + response.name;
+
+          fs.writeFile(final_download_path, response.fileBinary, 'binary', function (err) {
+
+            console.log("edropx_download_file_from_dropbox#fs.readFile Writing to " + final_download_path)
+
+            if (err) {
+
+              edropx_display_error("dstatus", err);
+              
+              console.log("edropx_download_file_from_dropbox#fs.readFile Error: ");
+              console.log(err);
+
+              return false;
+
+            }
+
+            console.log('File: ' + response.name + ' written.');
+          
+          });
+          
+          edropx_display_success("dstatus", "File Downloaded Correctly to: " + final_download_path);
+
+          console.log(response);
+        
+        })
+        .catch(function(error) {
+
+          edropx_display_error("dstatus", "Download - " + error.error);
+
+          console.error(error);
+        
+        });        
+
+      }
+
+      function edropx_get_shared_link(dbx, dropbox_remote_file_path, _short_url=true, returnvalue=false, download=false) {
+
+        let shared_link;
+
+        if(!returnvalue) {
+        
+          edropx_display_info("dstatus", "Getting Shared Link ...");
+
+        }
+
+        console.log("edropx_get_shared_link#dropbox_remote_file_path: " + dropbox_remote_file_path);
+        console.log("edropx_get_shared_link#_short_url: " + _short_url);
+
+        edropx.global.dbx.sharingCreateSharedLink({path: dropbox_remote_file_path, short_url: _short_url})
+        .then(function(response) {
+
+          shared_link = response.url;
+
+          console.log("edropx_get_shared_link#shared_link: " + shared_link.replace(/\=0/, "=1"));
+
+          console.log(response);
+
+          if(download) {
+
+            edropx_download_shared_link(shared_link.replace(/\=0/, "=1"));
+
+            return true;
+
+          }
+        
+
+          if(!returnvalue) {
+          
+            edropx_display_success(
+              "dstatus",
+              "Here it is your Shared Link: <a href=\"" + shared_link + "\" onclick=\"shell.openExternal(this.href); return false;\">" + shared_link + "</a>");
+
+            } else {
+
+              console.log("RITORNO shared_link di qui ...")
+
+              return shared_link;
+
+            }
+
+        })
+        .catch(function(error) {
+
+          edropx_display_error("dstatus", "Sharing Link - " + error.error);
+
+          console.error(error);
+        
+        });
+
+        if(returnvalue){
+
+          return shared_link;
+
+        }
+
+      }
+
+      function edropx_upload_local_file(dpath, fileobj) {
+
+        //Read File Contents
+
+        var file_contents = "";
+
+        // console.log("-> MAMMMMMMMMMMMMMMA MIA !!!!!!!!!!!!!!!!!!!!!!! <-");
+
+        console.log(fs);
+
+        file_contents = fs.readFileSync(fileobj.path, function read(err, response) {
+        
+            if (err) {
+
+              edropx_display_error("dstatus", err);
+              
+              console.log("edropx_upload_local_file#fs.readFile Error: ");
+              console.log(err);
+
+              return false;
+
+            }
+
+            // file_contents = response;
+
+            // console.log("edropx_upload_local_file#fs.readFileSync#file_contents: ");
+
+            // console.log(file_contents);
+
+            // console.log("edropx_upload_local_file#fs.readFileSync#response: ");
+
+            // console.log(response.toString());
+
+            
+
+        
+        });
+
+        console.log("edropx_upload_local_file#dpath: " + dpath);
+        console.log("edropx_upload_local_file#fileobj: " + fileobj);
+        console.log("edropx_upload_local_file#fileobj.name: " + fileobj.name);
+        console.log("edropx_upload_local_file#fileobj.path: " + fileobj.path);
+        // console.log("edropx_upload_local_file#file_contents: ");
+
+        // console.log(file_contents.toString());
+
+        // return;
+
+
+        // console.log(content);
+
+        var dropbox_remote_file_path = dpath + (dpath == "/" ? "" : "/") + fileobj.name;
+
+        console.log("edropx_upload_local_file#dpath: " + dpath);
+        console.log("edropx_upload_local_file#fileobj: " + fileobj);
+        console.log("edropx_upload_local_file#fileobj.name: " + fileobj.name);
+        console.log("edropx_upload_local_file#fileobj.path: " + fileobj.path);
+        console.log("dstatus", "edropx_upload_local_file#Uploading " + fileobj.name + " to " + dropbox_remote_file_path + "...");
+
+        edropx_display_info("dstatus", "Uploading " + fileobj.name + " to " + dropbox_remote_file_path + "...");
+
+        var tmp = edropx.global.dbx.filesUpload({path: dropbox_remote_file_path, contents: file_contents})
+        .then(function(response) {
+          
+          edropx_display_success("dstatus", "File Uploaded Correctly");
+
+          edropx_refresh();
+
+          console.log(response);
+        
+        })
+        .catch(function(error) {
+
+          edropx_display_error("dstatus", "Upload Error - " + error.error);
+
+          console.error(error);
+        
+        });
+
+        console.log(tmp);
+
+      }
+
+      if(edropx.global.dbx) {
+
+        edropx_openfolder('');
+
+      } else {
+
+        edropx_display_error("dstatus", "Error:</strong>var edropx.global.dbx is not present");
+
+      }
+
+      // Manage Drag&Drop
+
+      let tmpresponse;
+
+      window.ondragover = function(e) {
+        $('body').addClass('file-hover');
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        return false;
+      };
+
+      window.ondrop = function(e) {
+        e.preventDefault();
+        $('body').removeClass('file-hover');
+        for (var i = 0; i < e.dataTransfer.files.length; ++i) {
+
+          console.log(e.dataTransfer.files[i].path);
+
+          console.log(e.dataTransfer.files[i].path);
+
+          dpath = edropx.global.global_path;
+
+          if(edropx.global.global_path == "") {
+
+            dpath = "/";
+
+          }
+
+          // Upload dragged file to dropbox
+          console.log("edropx.global.global_path: ", edropx.global.global_path);
+          console.log("dpath: ", dpath);
+
+          edropx_upload_local_file(dpath, e.dataTransfer.files[i]);
+                  
+        }
+        return false;
+      };
+
+      window.ondragleave = function () {
+        $('body').removeClass('file-hover');
+        return false;
+      };  
+
+    </script>
+
+  </body>
+</html>

@@ -1,0 +1,70 @@
+ html, body {
+
+  font-size: 16px;
+
+}
+
+h1.title {
+
+  text-align: center;
+  padding-bottom: 20px;
+
+}
+
+div#dview, div#dstatus {
+
+  padding: 10px;
+  display: block;
+  width: 100%;
+
+}
+
+ul#folder_list {
+
+  list-style: none;
+
+}
+
+ul#folder_list > li.folder {
+
+  display: block;
+  margin: 2px;
+  padding: 10px;
+  float: left;
+  width: 120px;
+  height: 120px;
+  margin-top: 30px;
+  /*overflow: hidden;*/
+  overflow-wrap: break-word;
+  /*line-height: 40px;*/
+
+}
+
+ul#folder_list > li.folder.selected {
+
+  background-color: #6975FF;
+
+}
+
+ul#folder_list > li.folder.selected > a {
+
+  color: white;
+
+}
+
+#dcontrolBar,.navbar-nav > li, .navbar-nav > li > a {
+
+  background-color: #4549FF;
+  color: white;
+
+}
+
+.navbar-nav>li>a {
+  color: white;
+  font-size: 1.1em;
+  vertical-align: middle;
+}
+
+.navbar-nav > li > a:hover, .nav>li>a:focus, .navbar-nav > li.active, .navbar-nav > li.active > a {
+    background-color:#7C7EFF;
+}

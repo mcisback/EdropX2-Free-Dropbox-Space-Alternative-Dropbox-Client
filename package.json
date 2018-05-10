@@ -1,0 +1,16 @@
+{
+  "name": "EDrop",
+  "version": "0.1.0",
+  "main": "main.js",
+  "dependencies": {
+    "bootstrap": "^3.3.7",
+    "dropbox": "^2.5.12",
+    "dropbox-fs": "^0.1.0",
+    "electron": "^1.7.9",
+    "fontawesome": "^4.7.2",
+    "jquery": "^3.2.1"
+  },
+  "devDependencies": {
+    "electron-packager": "^9.1.0"
+  }
+}
