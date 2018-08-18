@@ -11,6 +11,6 @@ dfs.readdir('/', (err, result) => {
     console.log(result); // Array of files and folders
 });
 
-dfs.readFile('/banca_thai.txt', (err, result) => {
+dfs.readFile('/example.txt', (err, result) => {
     console.log(result.toString('utf8'));
 });
